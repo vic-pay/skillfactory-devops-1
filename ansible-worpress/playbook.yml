@@ -1,0 +1,65 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  become_method: sudo
+  tasks:
+
+  - name: Installing packages
+    apt: 
+      name: ['apache2', 'mysql-server', 'php', 'libapache2-mod-php', 'php-mysql',
+        'php-curl', 'php-gd', 'php-mbstring', 'php-xml', 'php-xmlrpc', 
+        'php-soap', 'php-intl', 'php-zip'] 
+      state: latest
+      update_cache: yes
+
+  - name: Creating MySQL database for wordpress
+    mysql_db:
+      name: wordpress
+      state: present
+      login_unix_socket: /var/run/mysqld/mysqld.sock
+
+  - name: Creating MySQL user for wordpress
+    mysql_user:
+      name: wordpress
+      password: '12345678'
+      state: present
+      priv: "wordpress.*:ALL"
+      login_unix_socket: /var/run/mysqld/mysqld.sock
+    no_log: yes
+
+  - name: Coping apache2 config
+    template:
+      src: templates/etc/apache2/sites-available/wordpress.conf
+      dest: /etc/apache2/sites-available/wordpress.conf
+
+  - name: Enabling apache2 module
+    apache2_module:
+      name: rewrite
+      state: present
+
+  - name: Enabling wordpress site
+    shell: /usr/sbin/a2ensite wordpress.conf
+
+  - name: Disabling default site
+    shell: /usr/sbin/a2dissite 000-default.conf
+
+  - name: Restarting apache2 service
+    service:
+      name: apache2
+      state: restarted
+
+  - name: Downloading and unpacking wordpress
+    unarchive:
+      src: https://wordpress.org/latest.tar.gz
+      dest: /var/www
+      remote_src: yes
+      creates: /var/www/wordpress
+
+  - name: Seting ownership to wordpress folder
+    file:
+      path: /var/www/wordpress
+      state: directory
+      recurse: yes
+      owner: www-data
+      group: www-data
